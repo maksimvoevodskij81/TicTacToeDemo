@@ -1,62 +1,78 @@
-﻿using TicTacToe.Domain.Game.Abstractions;
+﻿using TicTacToe.Domain.Board.Abstractions;
+using TicTacToe.Domain.Game.Abstractions;
 using TicTacToe.Domain.Game.Contracts;
-using TicTacToe.Web.Board.Constants;
 
 namespace TicTacToe.Web.Game
 {
     public class InMemoryGame : IGame
     {
-        private PlayerSymbol [,] _board;
-        private PlayerSymbol? _winner;
+        private readonly IBoard _board;
         private PlayerSymbol _currentPlayer;
-        private GameStatus _gameStatus;
-        public InMemoryGame() 
+        public InMemoryGame(IBoard board) 
         {
-
-            _board = new PlayerSymbol[BoardConstants.BoardSize, BoardConstants.BoardSize];
+            _board = board;
             _currentPlayer = PlayerSymbol.X;
-            _winner = null;
-            _gameStatus = GameStatus.NotStarted;
         }
+
         public GameState GetState()
         {
-            var result = new GameState(_gameStatus, _currentPlayer, _winner, Flat2DBoard());
-            return result;
+            var winner = _board.CheckWinner();
+            var board = _board.GetBoard();
+            if (winner != null)
+            {
+                return  new GameState(GameStatus.Won, _currentPlayer, winner, board);
+            }
+
+            var status = _board.IsFull() ? GameStatus.Draw : GameStatus.InProgress;
+            return new GameState(status, _currentPlayer, null, board);
         }
 
         public MoveResult MakeMove(PlayerSymbol player, int row, int column)
         {
-            if (player != _currentPlayer)
+            var state = GetState();
+
+            switch (state.Status)
             {
-                return new MoveResult(false, "400", "It is not your turn", GetState());
+                case GameStatus.Won: return new MoveResult(false, "GameFinished", "Game is already won.", state);
+                case GameStatus.InProgress: return DoMove(player, row, column, state);
+                case GameStatus.Draw: return new MoveResult(false, "GameFinished", "Game is a draw.", state);
+
+                default: return new MoveResult(false, "InvalidGameStatus", $"Unsupported status: {state.Status}", state);
             }
-            _board.
-            return new MoveResult();
+
         }
 
         public GameState Start()
         {
-            BuildBoard();
-
+            _board.GetBoard();
             return GetState();  
         }
 
-        private void BuildBoard()
+        private MoveResult DoMove(PlayerSymbol player, int row, int column, GameState gameState)
         {
-            for (int rowIndex = 0; rowIndex < BoardConstants.BoardSize; rowIndex++)
+            if (player != _currentPlayer)
             {
-                for (int columnIndex = 0; columnIndex < BoardConstants.BoardSize; columnIndex++)
-                {
-                    _board[rowIndex,columnIndex] =  PlayerSymbol.Empty;
-                }
+                return new MoveResult(false, "NotYourTurn", "It is not your turn", gameState);
             }
+
+            var boardUpdate = _board.TryPlace(row, column, player);
+
+            if (!boardUpdate.IsSuccess)
+            {
+                return new MoveResult(false, boardUpdate.ErrorCode, boardUpdate.ErrorMessage, gameState);
+            }
+
+            var winner = _board.CheckWinner();
+          
+            var isDraw = winner == null && _board.IsFull();
+
+            if (winner == null && !isDraw)
+            {
+                _currentPlayer = _currentPlayer == PlayerSymbol.X ? PlayerSymbol.O : PlayerSymbol.X;
+            }
+
+            var newState = GetState();
+            return new MoveResult(true, null, null, newState);
         }
-
-        private PlayerSymbol[] Flat2DBoard()
-        {
-            return _board.Cast<PlayerSymbol>().ToArray();
-        }
-
-
     }
 }

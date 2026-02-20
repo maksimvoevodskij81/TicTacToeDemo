@@ -9,7 +9,7 @@ namespace TicTacToe.Domain.Game.Contracts
 
     public enum GameStatus
     {
-        NotStarted = 0, InProgress = 1, Won = 2, Draw = 3
+        InProgress = 0, Won = 1, Draw = 2
     }
 
     public sealed record GameState(GameStatus Status, PlayerSymbol CurrentPlayer, PlayerSymbol? Winner, PlayerSymbol[] GameBoard);

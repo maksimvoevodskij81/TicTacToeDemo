@@ -1,7 +1,14 @@
+using TicTacToe.Domain.Board.Abstractions;
+using TicTacToe.Domain.Game.Abstractions;
+using TicTacToe.Web.Board;
+using TicTacToe.Web.Game;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddScoped<IGame, InMemoryGame>();
+builder.Services.AddScoped<IBoard, Board>();
 
 var app = builder.Build();
 
