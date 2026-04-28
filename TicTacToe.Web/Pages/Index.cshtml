@@ -1,10 +1,166 @@
 ﻿@page
-@model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "TicTacToe";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<h1>TicTacToe</h1>
+
+<div style="margin-bottom: 12px;">
+    <button id="newGameBtn" type="button">New game</button>
+    <span style="margin-left: 12px;">GameId: <strong id="gameIdLabel">-</strong></span>
 </div>
+
+<div id="status" style="margin-bottom: 12px;"></div>
+
+<div id="board"
+     style="display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap: 6px;">
+</div>
+
+<script>
+    (function () {
+        let gameId = null;
+        let state = null;
+
+        const newGameBtn = document.getElementById("newGameBtn");
+        const boardEl = document.getElementById("board");
+        const statusEl = document.getElementById("status");
+        const gameIdLabel = document.getElementById("gameIdLabel");
+
+        newGameBtn.addEventListener("click", async function () {
+            await createGame();
+        });
+
+        async function createGame() {
+            statusEl.textContent = "Creating game...";
+            const response = await fetch("/games", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            });
+
+            if (!response.ok) {
+                statusEl.textContent = "Failed to create game.";
+                return;
+            }
+
+            const data = await response.json();
+            gameId = data.gameId || data.GameId;
+            state = data.state || data.State;
+
+            gameIdLabel.textContent = gameId;
+            render(state);
+        }
+
+        async function makeMove(row, column) {
+            if (!gameId) {
+                statusEl.textContent = "Create a game first.";
+                return;
+            }
+
+            if (!state) {
+                statusEl.textContent = "No state loaded.";
+                return;
+            }
+
+            const payload = {
+                player: state.currentPlayer ?? state.CurrentPlayer,
+                row: row,
+                column: column
+            };
+
+            const response = await fetch(`/games/${gameId}/moves`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.status === 404) {
+                statusEl.textContent = "Game not found (404). Create a new one.";
+                return;
+            }
+
+            const result = await response.json();
+
+            // For 200 OK and 400 BadRequest we expect MoveResult body
+            if (response.ok) {
+                statusEl.textContent = "";
+            } else {
+                statusEl.textContent = (result.errorMessage ?? result.ErrorMessage ?? "Invalid move");
+            }
+
+            state = result.gameState ?? result.GameState;
+            render(state);
+        }
+
+        function render(s) {
+            if (!s) {
+                statusEl.textContent = "No state to render.";
+                return;
+            }
+
+            const board = s.gameBoard ?? s.GameBoard;
+            const status = s.status ?? s.Status;
+            const currentPlayer = s.currentPlayer ?? s.CurrentPlayer;
+            const winner = s.winner ?? s.Winner;
+
+            // Status can be enum int or string depending on serializer; handle both
+            const statusText = normalizeStatus(status);
+
+            let header = `Status: ${statusText}. Current: ${symbolToText(currentPlayer)}.`;
+            if (winner !== null && winner !== undefined) {
+                header += ` Winner: ${symbolToText(winner)}.`;
+            }
+            statusEl.textContent = header;
+
+            boardEl.innerHTML = "";
+
+            const finished = (statusText === "Won" || statusText === "Draw");
+
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const idx = (row * 3) + col;
+                    const cellValue = board[idx];
+
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.style.width = "64px";
+                    btn.style.height = "64px";
+                    btn.style.fontSize = "24px";
+                    btn.style.cursor = "pointer";
+
+                    btn.textContent = symbolToText(cellValue);
+
+                    const cellEmpty = isEmpty(cellValue);
+                    btn.disabled = finished || !cellEmpty;
+
+                    btn.addEventListener("click", async function () {
+                        await makeMove(row, col);
+                    });
+
+                    boardEl.appendChild(btn);
+                }
+            }
+        }
+
+        function isEmpty(value) {
+            // If enum serialized as int: Empty=0, X=1, O=2
+            if (value === 0) { return true; }
+            if (value === "Empty") { return true; }
+            return false;
+        }
+
+        function symbolToText(value) {
+            if (value === 1 || value === "X") { return "X"; }
+            if (value === 2 || value === "O") { return "O"; }
+            return "";
+        }
+
+        function normalizeStatus(value) {
+            // If enum serialized as int: NotStarted=0, InProgress=1, Won=2, Draw=3
+            if (value === 0 || value === "NotStarted") { return "NotStarted"; }
+            if (value === 1 || value === "InProgress") { return "InProgress"; }
+            if (value === 2 || value === "Won") { return "Won"; }
+            if (value === 3 || value === "Draw") { return "Draw"; }
+            return String(value);
+        }
+    })();
+</script>
